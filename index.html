@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HelpBot — Interactive FAQ Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0F1115;
+    --surface:#181B22;
+    --bubble-bot:#1F2430;
+    --bubble-user:#3B6EF6;
+    --line:#282D3A;
+    --accent:#FFC857;
+    --text:#EDEFF4;
+    --muted:#868D9E;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{background:var(--bg); color:var(--text); font-family:'Inter',sans-serif; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;}
+  .display{font-family:'Space Grotesk',sans-serif;}
+  #app{width:100%; max-width:520px; background:var(--surface); border:1px solid var(--line); border-radius:20px; overflow:hidden; display:flex; flex-direction:column; height:660px; max-height:90vh; box-shadow: 0 20px 40px rgba(0,0,0,0.5);}
+
+  header{padding:16px 18px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px;}
+  header .avatar{width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--accent),#FF8C42); display:flex; align-items:center; justify-content:center; font-size:20px;}
+  header h1{font-size:16px;}
+  header .status{font-size:11px; color:#4CD964; display:flex; align-items:center; gap:5px;}
+  header .status::before{content:''; width:7px; height:7px; border-radius:50%; background:#4CD964;}
+
+  #messages{flex:1; overflow-y:auto; padding:18px; display:flex; flex-direction:column; gap:12px;}
+  .msg{max-width:85%; padding:11px 14px; border-radius:16px; font-size:14px; line-height:1.5; animation: fadeIn 0.3s ease;}
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  
+  .msg.bot{background:var(--bubble-bot); align-self:flex-start; border-bottom-left-radius:4px;}
+  .msg.user{background:var(--bubble-user); color:white; align-self:flex-end; border-bottom-right-radius:4px;}
+  .msg .conf{font-size:10px; color:var(--muted); margin-top:6px;}
+
+  /* Categories Bar */
+  .categories{display:flex; gap:6px; padding:8px 18px; overflow-x:auto; border-bottom:1px solid var(--line); background:#13161C;}
+  .cat-btn{background:var(--surface); border:1px solid var(--line); color:var(--muted); font-size:11px; padding:6px 12px; border-radius:8px; cursor:pointer; white-space:nowrap; transition:0.2s;}
+  .cat-btn:hover{color:var(--text); border-color:var(--accent);}
+
+  /* Suggestions */
+  .suggestions{display:flex; flex-wrap:wrap; gap:6px; padding:8px 18px 12px;}
+  .suggestions button{background:var(--bubble-bot); border:1px solid var(--line); color:var(--text); font-size:12px; padding:7px 12px; border-radius:999px; cursor:pointer; transition:all 0.2s;}
+  .suggestions button:hover{border-color:var(--accent); background:var(--surface);}
+
+  /* Typing Dots */
+  .typing{display:flex; gap:4px; align-items:center; padding:12px 16px;}
+  .typing span{width:6px; height:6px; background:var(--muted); border-radius:50%; animation: blink 1.4s infinite ease-in-out;}
+  .typing span:nth-child(2){animation-delay: .2s;}
+  .typing span:nth-child(3){animation-delay: .4s;}
+  @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+  /* Action Buttons inside Bot Message */
+  .action-btn{display:inline-block; margin-top:8px; background:var(--accent); color:#0F1115; border:none; padding:6px 12px; border-radius:8px; font-weight:600; font-size:12px; cursor:pointer;}
+
+  form#inputForm{display:flex; gap:8px; padding:14px; border-top:1px solid var(--line);}
+  input#userInput{flex:1; background:var(--bubble-bot); border:1px solid var(--line); color:var(--text); padding:12px 14px; border-radius:12px; font-family:inherit; font-size:14px;}
+  input#userInput:focus{outline:none; border-color:var(--accent);}
+  button#sendBtn{background:var(--accent); color:#0F1115; border:none; width:44px; border-radius:12px; font-size:16px; cursor:pointer; font-weight:700;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="avatar">🤖</div>
+    <div>
+      <h1 class="display">HelpBot</h1>
+      <div class="status">Online — Smart Support</div>
+    </div>
+  </header>
+
+  <div class="categories">
+    <button class="cat-btn" onclick="filterCategory('Tracking')">📦 Tracking</button>
+    <button class="cat-btn" onclick="filterCategory('Returns')">🔄 Returns</button>
+    <button class="cat-btn" onclick="filterCategory('Payment')">💳 Payment</button>
+    <button class="cat-btn" onclick="filterCategory('Shipping')">🚀 Shipping</button>
+  </div>
+
+  <div id="messages"></div>
+  <div class="suggestions" id="suggestions"></div>
+
+  <form id="inputForm">
+    <input type="text" id="userInput" placeholder="Ask a question..." autocomplete="off">
+    <button type="submit" id="sendBtn">➤</button>
+  </form>
+</div>
+
+<script>
+(function(){
+  const FAQS = [
+    { cat:"Tracking", q:"How do I track my order?", a:"You can track your order from the 'My Orders' page by clicking 'Track Package'." },
+    { cat:"Returns", q:"What is your return policy?", a:"We accept returns within 30 days of delivery for unused items." },
+    { cat:"Shipping", q:"How long does shipping take?", a:"Standard shipping takes 3-5 days. Express takes 1-2 days." },
+    { cat:"Shipping", q:"Do you ship internationally?", a:"Yes! We ship to over 40 countries within 7-14 business days." },
+    { cat:"Tracking", q:"How can I cancel my order?", a:"Orders can be cancelled within 1 hour from 'My Orders'." },
+    { cat:"Payment", q:"What payment methods do you accept?", a:"We accept Credit/Debit cards, PayPal, and Apple Pay." },
+    { cat:"Payment", q:"Is my payment information secure?", a:"Yes, all transactions are encrypted via PCI-compliant gateways." },
+    { cat:"Returns", q:"Do you offer refunds?", a:"Refunds are processed within 5-7 business days after we receive the item." }
+  ];
+
+  const STOPWORDS = new Set(['the','is','a','an','of','to','in','and','or','for','on','do','does','my','your','i','you','what','how','can']);
+
+  function tokenize(text){
+    return text.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=> w.length>0 && !STOPWORDS.has(w));
+  }
+
+  const docs = FAQS.map(f=>tokenize(f.q));
+  const vocab = Array.from(new Set(docs.flat()));
+  const df = {};
+  vocab.forEach(term=>{ df[term] = docs.filter(d=>d.includes(term)).length; });
+  const N = docs.length;
+
+  function tfidfVector(tokens){
+    const tf = {};
+    tokens.forEach(t=>{ tf[t]=(tf[t]||0)+1; });
+    return vocab.map(term=>{
+      const tfVal = (tf[term]||0) / (tokens.length||1);
+      const idfVal = Math.log((N+1)/((df[term]||0)+1)) + 1;
+      return tfVal*idfVal;
+    });
+  }
+
+  const faqVectors = docs.map(d=>tfidfVector(d));
+
+  function cosineSim(a,b){
+    let dot=0, magA=0, magB=0;
+    for(let i=0;i<a.length;i++){ dot+=a[i]*b[i]; magA+=a[i]*a[i]; magB+=b[i]*b[i]; }
+    return (magA===0||magB===0) ? 0 : dot/(Math.sqrt(magA)*Math.sqrt(magB));
+  }
+
+  function findBestMatch(userText){
+    const tokens = tokenize(userText);
+    if(tokens.length===0) return null;
+    const userVec = tfidfVector(tokens);
+    let best = {idx:-1, score:0};
+    faqVectors.forEach((vec,i)=>{
+      const score = cosineSim(userVec, vec);
+      if(score>best.score) best = {idx:i, score};
+    });
+    return best.idx>=0 ? { ...FAQS[best.idx], score:best.score } : null;
+  }
+
+  const messagesEl = document.getElementById('messages');
+  const form = document.getElementById('inputForm');
+  const input = document.getElementById('userInput');
+  const suggestionsEl = document.getElementById('suggestions');
+
+  function addMessage(htmlContent, sender){
+    const div = document.createElement('div');
+    div.className = 'msg '+sender;
+    div.innerHTML = htmlContent;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function showTypingIndicator(){
+    const div = document.createElement('div');
+    div.className = 'msg bot typing';
+    div.id = 'typingIndicator';
+    div.innerHTML = '<span></span><span></span><span></span>';
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function hideTypingIndicator(){
+    const el = document.getElementById('typingIndicator');
+    if(el) el.remove();
+  }
+
+  function botReply(userText){
+    showTypingIndicator();
+    setTimeout(()=>{
+      hideTypingIndicator();
+      const match = findBestMatch(userText);
+      if(!match || match.score < 0.2){
+        addMessage(`I couldn't quite understand that. Would you like to connect with human support?<br><button class="action-btn" onclick="alert('Connecting to Support Agent...')">📩 Contact Support</button>`, 'bot');
+      } else {
+        addMessage(`${match.a}<div class="conf">Matched topic: ${match.cat}</div>`, 'bot');
+      }
+    }, 900);
+  }
+
+  window.filterCategory = function(catName){
+    suggestionsEl.innerHTML = '';
+    const filtered = FAQS.filter(f=>f.cat===catName);
+    filtered.forEach(f=> createSuggestionButton(f.q));
+  };
+
+  function createSuggestionButton(questionText){
+    const btn = document.createElement('button');
+    btn.textContent = questionText;
+    btn.addEventListener('click', ()=>{
+      addMessage(questionText, 'user');
+      botReply(questionText);
+    });
+    suggestionsEl.appendChild(btn);
+  }
+
+  form.addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const text = input.value.trim();
+    if(!text) return;
+    addMessage(text, 'user');
+    input.value = '';
+    botReply(text);
+  });
+
+  // Welcome Setup
+  addMessage("Hi! I'm HelpBot 👋 Click a category above or choose a quick question below.", 'bot');
+  FAQS.slice(0,4).forEach(f=> createSuggestionButton(f.q));
+})();
+</script>
+</body>
+</html>
